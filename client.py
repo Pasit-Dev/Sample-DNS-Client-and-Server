@@ -2,7 +2,7 @@ import dns.resolver
 
 def resolve_domain(domain):
     try:
-        # Query A records
+        # Query A records 
         result = dns.resolver.resolve(domain, 'A')
         print(f"IP addresses for {domain}:")
         for ipval in result:

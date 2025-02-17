@@ -27,7 +27,6 @@ def handle_dns_query(data):
         qname = query.question[0].name
         qtype = query.question[0].rdtype
 
-        # Provide a fixed IP response; modify this logic as needed for your use case
         if qtype == dns.rdatatype.A:
             rrset = dns.rrset.from_text(qname, 60, "IN", "A", "127.0.0.1")
             response.answer.append(rrset)
