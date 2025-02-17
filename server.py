@@ -1,47 +1,43 @@
-import socket
 import dns.message
-import dns.name
 import dns.query
-import dns.rrset
 import dns.rcode
-import dns.rdatatype
+import dns.rrset
+import socket
 
-def handle_query(data, address, sock):
-    # แปลงข้อมูลที่ได้รับมาเป็น DNS message
-    try:
-        query = dns.message.from_wire(data)
-    except Exception as e:
-        print(f"Failed to parse query: {e}")
-        return
-
-    # สร้าง DNS response
-    response = dns.message.make_response(query)
-
-    # ตรวจสอบว่าเป็นคำขอประเภท A record หรือไม่
-    for question in query.question:
-        if question.rdtype == dns.rdatatype.A:
-            # เพิ่มคำตอบใน response (เช่น return IP 127.0.0.1 สำหรับ domain ใด ๆ)
-            rrset = dns.rrset.from_text(question.name, 300, 'IN', 'A', '127.0.0.1')
-            response.answer.append(rrset)
-
-    # ส่ง response กลับไปให้ client
-    sock.sendto(response.to_wire(), address)
-
-
-def simple_dns_server(ip='0.0.0.0', port=1053):
+def start_dns_server(ip="0.0.0.0", port=1053):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((ip, port))
-
-    print(f"DNS Server running on {ip}:{port}")
+    print(f"DNS server started on {ip}:{port}")
 
     try:
         while True:
-            data, addr = sock.recvfrom(512)  # รับข้อมูลสูงสุด 512 ไบต์
-            handle_query(data, addr, sock)
+            data, addr = sock.recvfrom(512)
+            response = handle_dns_query(data)
+            if response:
+                sock.sendto(response.to_wire(), addr)
     except KeyboardInterrupt:
-        print("Shutting down DNS server.")
+        print("Stopping the DNS server.")
     finally:
         sock.close()
 
-if __name__ == '__main__':
-    simple_dns_server()
+def handle_dns_query(data):
+    try:
+        query = dns.message.from_wire(data)
+        response = dns.message.make_response(query)
+        qname = query.question[0].name
+        qtype = query.question[0].rdtype
+
+        # Provide a fixed IP response; modify this logic as needed for your use case
+        if qtype == dns.rdatatype.A:
+            rrset = dns.rrset.from_text(qname, 60, "IN", "A", "127.0.0.1")
+            response.answer.append(rrset)
+        else:
+            response.set_rcode(dns.rcode.SERVFAIL)
+
+        return response
+    except Exception as e:
+        print(f"Error processing DNS request: {e}")
+        return None
+
+if __name__ == "__main__":
+    start_dns_server()

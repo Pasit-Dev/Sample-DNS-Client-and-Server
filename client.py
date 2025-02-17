@@ -1,11 +1,15 @@
 import dns.resolver
 
-def dns_client(domain):
+def resolve_domain(domain):
     try:
-        answers = dns.resolver.resolve(domain, 'A')
-        for rdata in answers:
-            print(f'IP address for {domain}: {rdata.address}')
+        # Query A records
+        result = dns.resolver.resolve(domain, 'A')
+        print(f"IP addresses for {domain}:")
+        for ipval in result:
+            print(ipval.to_text())
     except Exception as e:
-        print(f'Failed to resolve domain {domain}: {e}')
+        print(f"An error occurred: {e}")
 
-dns_client('example.com')
+if __name__ == "__main__":
+    domain = "example.com"
+    resolve_domain(domain)
