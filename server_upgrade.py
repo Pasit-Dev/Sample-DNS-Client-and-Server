@@ -5,9 +5,6 @@ from dnslib import DNSRecord, QTYPE, RR, A
 from dnslib.server import DNSServer, BaseResolver
 
 class CustomDNSResolver(BaseResolver):
-    """
-    ตัวจัดการ DNS ที่รองรับทั้งโหมด Custom และ Forward
-    """
     def __init__(self, use_custom_dns=True, forward_dns="1.1.1.1", port=53):
         self.use_custom_dns = use_custom_dns
         self.forward_dns = forward_dns
@@ -15,28 +12,30 @@ class CustomDNSResolver(BaseResolver):
 
     def resolve(self, request, handler):
         reply = request.reply()
-
         for question in request.questions:
-            question_name = str(question.get_qname())
+            domain = str(question.get_qname())
 
-            if self.use_custom_dns and question.qtype == QTYPE.A and question_name == 'example.com.':
-                # ตอบกลับค่า custom สำหรับ example.com
+            # ✅ Custom DNS (example.com -> 192.168.1.1)
+            if self.use_custom_dns and question.qtype == QTYPE.A and domain == 'example.com.':
                 reply.add_answer(RR('example.com', QTYPE.A, rdata=A('192.168.1.1'), ttl=60))
             else:
-                # Forward คำขอไปยัง Cloudflare หรือ Google DNS
+                # ✅ Forward ไปยัง Cloudflare / Google DNS
                 try:
-                    response_data = DNSRecord.question(question_name).send(self.forward_dns, self.port)
-                    response = DNSRecord.parse(response_data)
-                    return response
-                except socket.error:
-                    print(f"❌ Failed to forward request to {self.forward_dns}")
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                        s.settimeout(5)  # Timeout 5 วินาที
+                        request_data = request.pack()
+                        s.sendto(request_data, (self.forward_dns, self.port))
+                        response_data, _ = s.recvfrom(1024)
+                    return DNSRecord.parse(response_data)
+
+                except socket.timeout:
+                    print(f"❌ Timeout: DNS forward to {self.forward_dns} failed")
+                except Exception as e:
+                    print(f"❌ Forwarding error: {e}")
 
         return reply
 
-def start_dns_server(port=5353, use_custom_dns=True, forward_dns="1.1.1.1"):
-    """
-    เริ่มต้น DNS Server และรองรับโหมด Custom หรือ Forward
-    """
+def start_dns_server(port=53, use_custom_dns=True, forward_dns="8.8.8.8"):
     resolver = CustomDNSResolver(use_custom_dns=use_custom_dns, forward_dns=forward_dns)
     server = DNSServer(resolver, port=port, address='0.0.0.0')
     server_thread = threading.Thread(target=server.start)
@@ -47,11 +46,9 @@ def start_dns_server(port=5353, use_custom_dns=True, forward_dns="1.1.1.1"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Custom or Forwarding DNS Server")
-
-    # ตัวเลือกให้เลือกโหมดผ่าน Terminal
     parser.add_argument("--custom", action="store_true", help="ใช้ DNS ที่กำหนดเอง (example.com -> 192.168.1.1)")
-    parser.add_argument("--forward", type=str, default="1.1.1.1", help="ตั้งค่า DNS resolver สำหรับ forward (default: Cloudflare 1.1.1.1)")
-    parser.add_argument("--port", type=int, default=5353, help="พอร์ตของ DNS Server (default: 5353)")
+    parser.add_argument("--forward", type=str, default="8.8.8.8", help="ตั้งค่า DNS Forwarding (default: 8.8.8.8)")
+    parser.add_argument("--port", type=int, default=53, help="พอร์ตของ DNS Server (default: 53)")
 
     args = parser.parse_args()
 
